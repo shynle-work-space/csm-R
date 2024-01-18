@@ -9,6 +9,7 @@ library(car)
 library(glmnet)
 library(DescTools)
 library(naniar)
+library(mice)
 
 
 
@@ -202,7 +203,6 @@ print(paste("Column that are H1:", MAR_cols))
 
 df_filtered <- feature_df[Non_MAR_cols]
 
-print(df_filtered)
 H0_MCAR <- list()
 H1_MCAR <- list()
 
@@ -216,4 +216,23 @@ for (i in Non_MAR_cols) {
 }
 print(paste("Columns that are MCAR: ", H0_MCAR))
 print(paste("Columns that are not MCAR: ", H1_MCAR))
+
+# Imputation
+
+## MCAR imputation: Replace with mean
+
+imputed_df <- feature_df
+for(i in H0_MCAR) {
+  mean_val <- mean(unlist(imputed_df[, i]), na.rm = TRUE)
+  imputed_df[[i]] <- ifelse(is.na(imputed_df$agg_fl), mean_val, imputed_df[[i]])
+}
+
+## MAR imputation: Multiple imputation
+
+MAR_df <- imputed_df[, H1_MAR]
+imputed_data <- mice(MAR_df, m = 1, maxit = 10, method = 'pmm', seed = 21)
+completed_data <- complete(imputed_data, 1)
+
+imputed_df$Budget <- completed_data$Budget
+imputed_df$Screens <- completed_data$Screens
 
