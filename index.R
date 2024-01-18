@@ -1,11 +1,13 @@
 library(readxl)
 library(Hmisc)
 library(corrplot)
+library(MASS)
 library(dplyr)
 library(caret)
 library(ggplot2)
 library(car)
 library(glmnet)
+library(DescTools)
 
 
 # Read data
@@ -13,6 +15,7 @@ df <- read_excel("CSM.xlsx")
 
 # Preprocessing
 feature_df <- df %>% select(-Movie)
+
 feature_df <- feature_df %>% 
   rename(
     agg_fl = "Aggregate Followers"
@@ -69,8 +72,10 @@ plot <- ggplot(train_test_len, aes(x = Category, y = Values, fill = Group)) +
 print(plot)
 
 
+# Construct base model
 lm_base <- lm("Gross ~ .", data = train_1)
-# Print a summary of the model
+
+## Print a summary of the model
 summary(lm_base)
 
 calculate_result <- function (model, test_data) {
@@ -98,45 +103,94 @@ normal_test <- function(model) {
 
 print(normal_test(lm_base))
 
+draw_qqplot <- function(data, title) {
+  qqPlot(data, main=title)
+}
+
+qqPlot(lm_base$residuals, main="QQ plot of base model")
+
+numeric_cols = c("Ratings", "Budget", "Screens", "Views", "Likes", "Dislikes", "Comments", "agg_fl")
+for (i in numeric_cols) {
+  draw_qqplot(train_1[[i]], i)
+}
+
+# Transform the outlier before box-cox transformation
+winsorize_df <- function(df, numeric_cols) {
+  winsorize_column <- function(x) {
+    Winsorize(x, prob = c(0.05, 0.95))
+  }
+  new_df <- df
+  new_df <- new_df %>%
+    mutate(across(all_of(numeric_cols), winsorize_column))
+  return(new_df)
+}
+
+winsor_df <- winsorize_df(train_1, numeric_cols)
+
+# Box-cox transformation
+
+box_cox_trans <- function (df, numeric_cols) {
+  new_df <- df
+  y_ <- new_df$Gross
+  for(i in numeric_cols) {
+    x_ <- df[[i]]
+    bc <- boxcox(x_ ~ y_)
+    lambda <- bc$x[which.max(bc$y)]
+    new_x_exact <- (x_ ^ lambda - 1) / lambda
+    new_df[[i]] <- new_x_exact
+  }
+  return(new_df)
+}
+
+
+train_2 <- box_cox_trans(winsor_df, numeric_cols)
+
+lm_2 <- lm("Gross ~ .", data = train_2)
+
+print(normal_test(lm_2))
+
+qqPlot(lm_2$residuals, main="QQ plot of box-cox model")
+
+
 # Draw Correlation heatmap
-train_no_genre <- train_1 %>% select(-Genre_factor)
+train_no_genre <- train_2 %>% select(-Genre_factor)
 corrplot(cor(train_no_genre), method = "circle")
 
-vif_result <- vif(lm_base)
+print(alias(lm_2))
+
+vif_result <- vif(lm_2)
 print(vif_result)
-# # print(alias(lm_base))
-
-# ## => genre9 perfectly alias => completely removed
-# # train_2 <- train_1 %>% select(-Genre9)
-# # test_2 <- test_1 %>% select(-Genre9)
 
 
-# # df <- data.frame(
-# #   x1 = c(1, 2, 3, 4),
-# #   x2 = c(2, 4, 6, 8),
-# #   x3 = c(3, 6, 9, 12),
-# #   y = c(5, 10, 15, 20)
-# # )
 
-# # x_ <- train_1 %>% select(-Gross)
+## => genre9 perfectly alias => completely removed
+# train_2 <- train_1 %>% select(-Genre9)
+# test_2 <- test_1 %>% select(-Genre9)
 
 
-# # # Separate predictors (x) and response (y)
-# # x <- as.matrix(x_)
-# # y <- train_1$Gross
+# df <- data.frame(
+#   x1 = c(1, 2, 3, 4),
+#   x2 = c(2, 4, 6, 8),
+#   x3 = c(3, 6, 9, 12),
+#   y = c(5, 10, 15, 20)
+# )
 
-# # # Perform Ridge regression
-# # ridge_model <- glmnet(x, y, alpha = 0)
-
-# # # Display coefficients
-# # coefficients <- coef(ridge_model, s=0.1)
-# # print("Ridge Coefficients:")
-# # print(coefficients)
+# x_ <- train_1 %>% select(-Gross)
 
 
-# # lm_2 <- lm("Gross ~ .", data = train_2)
-# # # # Print a summary of the model
-# # # summary(lm_2)
+# # Separate predictors (x) and response (y)
+# x <- as.matrix(x_)
+# y <- train_1$Gross
 
-# vif_result <- vif(lm_base)
-# print(vif_result)
+# # Perform Ridge regression
+# ridge_model <- glmnet(x, y, alpha = 0)
+
+# # Display coefficients
+# coefficients <- coef(ridge_model, s=0.1)
+# print("Ridge Coefficients:")
+# print(coefficients)
+
+
+# lm_2 <- lm("Gross ~ .", data = train_2)
+# # # Print a summary of the model
+# # summary(lm_2)
