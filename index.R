@@ -8,6 +8,8 @@ library(ggplot2)
 library(car)
 library(glmnet)
 library(DescTools)
+library(naniar)
+
 
 
 # Read data
@@ -162,35 +164,56 @@ vif_result <- vif(lm_2)
 print(vif_result)
 
 
+# Missing data test
 
-## => genre9 perfectly alias => completely removed
-# train_2 <- train_1 %>% select(-Genre9)
-# test_2 <- test_1 %>% select(-Genre9)
+columns_with_missing <- colnames(feature_df)[colSums(is.na(feature_df)) > 0]
 
+## Missing at Random (MAR) test using logreg
 
-# df <- data.frame(
-#   x1 = c(1, 2, 3, 4),
-#   x2 = c(2, 4, 6, 8),
-#   x3 = c(3, 6, 9, 12),
-#   y = c(5, 10, 15, 20)
-# )
-
-# x_ <- train_1 %>% select(-Gross)
+## Create an array indicating missing values
+## 0 if No missing, 1 if there is missing data
+missing_indicator <- apply(is.na(feature_df), 1, function(row) ifelse(any(row), 0, 1))
 
 
-# # Separate predictors (x) and response (y)
-# x <- as.matrix(x_)
-# y <- train_1$Gross
+p_vals <- rep(NA, length(columns_with_missing))
 
-# # Perform Ridge regression
-# ridge_model <- glmnet(x, y, alpha = 0)
+for (j in 1:length(columns_with_missing)) {
+  col_name <- columns_with_missing[j]
+  s <- summary(glm(missing_indicator ~ unlist(feature_df[, col_name])), family = binomial)
+  p_vals[j] <- s$coefficients[2,4]
+  s$coefficients[2,4]
+}
 
-# # Display coefficients
-# coefficients <- coef(ridge_model, s=0.1)
-# print("Ridge Coefficients:")
-# print(coefficients)
+print(p_vals)
+H0_MAR <- which(p_vals >= 0.05)
+H1_MAR <- which(p_vals < 0.05)
+
+print("H0 means that either missing value are MCAR, or MNAR")
+Non_MAR_cols <- columns_with_missing[H0_MAR]
+print(paste("Column that are H0:", Non_MAR_cols))
+
+print("H1 means that MAR")
+MAR_cols <- columns_with_missing[H1_MAR]
+print(paste("Column that are H1:", MAR_cols))
 
 
-# lm_2 <- lm("Gross ~ .", data = train_2)
-# # # Print a summary of the model
-# # summary(lm_2)
+
+## Missing Completely at Random (MCAR) test
+
+df_filtered <- feature_df[Non_MAR_cols]
+
+print(df_filtered)
+H0_MCAR <- list()
+H1_MCAR <- list()
+
+for (i in Non_MAR_cols) {
+  mcar_p_val <- mcar_test(data.frame(df_filtered[, i]))[1, 3]
+  if(mcar_p_val >= 0.05) {
+    H0_MCAR <- c(H0_MCAR, i)
+  } else {
+    H1_MCAR <- c(H1_MCAR, i)
+  }
+}
+print(paste("Columns that are MCAR: ", H0_MCAR))
+print(paste("Columns that are not MCAR: ", H1_MCAR))
+
