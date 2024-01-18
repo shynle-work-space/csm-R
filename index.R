@@ -5,6 +5,8 @@ library(dplyr)
 library(caret)
 library(ggplot2)
 library(car)
+library(glmnet)
+
 
 # Read data
 df <- read_excel("CSM.xlsx")
@@ -13,17 +15,17 @@ df <- read_excel("CSM.xlsx")
 feature_df <- df %>% select(-Movie)
 feature_df <- feature_df %>% 
   rename(
-    aggregated_followers = "Aggregate Followers"
+    agg_fl = "Aggregate Followers"
     )
+
 ## Binary encoding
 feature_df <- feature_df %>%
   mutate(is_2015 = as.integer(Year == 2015))
-
 feature_df <- feature_df %>%
   mutate(is_sequel = as.integer(Sequel > 1))
-## One-hot encoding
-feature_df$Genre <- as.character(feature_df$Genre)
-feature_df <- cbind(feature_df, model.matrix(~ Genre - 1, data = feature_df))
+
+## Factorize `Genre`
+feature_df$Genre_factor <- factor(feature_df$Genre)
 
 ## Remove encoded features
 feature_df <- feature_df %>% select(-Genre)
@@ -33,7 +35,7 @@ feature_df <- feature_df %>% select(-Sequel)
 
 # Train test split
 set.seed(21)
-splitIndex <- createDataPartition(feature_df$Gross, p = 0.75, list = FALSE)
+splitIndex <- createDataPartition(feature_df$Genre_factor, p = 0.75, list = FALSE)
 train_data <- feature_df[splitIndex, ]
 test_data <- feature_df[-splitIndex, ]
 
@@ -67,8 +69,6 @@ plot <- ggplot(train_test_len, aes(x = Category, y = Values, fill = Group)) +
 print(plot)
 
 
-print(names(train_1))
-
 lm_base <- lm("Gross ~ .", data = train_1)
 # Print a summary of the model
 summary(lm_base)
@@ -84,7 +84,8 @@ calculate_result <- function (model, test_data) {
 }
 
 print("Results of base model is:\n")
-print(calculate_result(lm_base, test_1))
+result_lmbase <- calculate_result(lm_base, test_1)
+print(result_lmbase)
 
 # Normality test
 normal_test <- function(model) {
@@ -96,3 +97,46 @@ normal_test <- function(model) {
 }
 
 print(normal_test(lm_base))
+
+# Draw Correlation heatmap
+train_no_genre <- train_1 %>% select(-Genre_factor)
+corrplot(cor(train_no_genre), method = "circle")
+
+vif_result <- vif(lm_base)
+print(vif_result)
+# # print(alias(lm_base))
+
+# ## => genre9 perfectly alias => completely removed
+# # train_2 <- train_1 %>% select(-Genre9)
+# # test_2 <- test_1 %>% select(-Genre9)
+
+
+# # df <- data.frame(
+# #   x1 = c(1, 2, 3, 4),
+# #   x2 = c(2, 4, 6, 8),
+# #   x3 = c(3, 6, 9, 12),
+# #   y = c(5, 10, 15, 20)
+# # )
+
+# # x_ <- train_1 %>% select(-Gross)
+
+
+# # # Separate predictors (x) and response (y)
+# # x <- as.matrix(x_)
+# # y <- train_1$Gross
+
+# # # Perform Ridge regression
+# # ridge_model <- glmnet(x, y, alpha = 0)
+
+# # # Display coefficients
+# # coefficients <- coef(ridge_model, s=0.1)
+# # print("Ridge Coefficients:")
+# # print(coefficients)
+
+
+# # lm_2 <- lm("Gross ~ .", data = train_2)
+# # # # Print a summary of the model
+# # # summary(lm_2)
+
+# vif_result <- vif(lm_base)
+# print(vif_result)
