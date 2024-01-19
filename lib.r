@@ -77,8 +77,7 @@ remove_outlier <- function(df, numeric_cols) {
   return(data.frame(new_df))
 }
 
-run_vif <- function (data) {
-  model <- lm("Gross ~ .", data = data)
+run_vif <- function (model) {
   vif_result <- vif(model)
   print("VIF result")
   print(vif_result)

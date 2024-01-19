@@ -92,28 +92,193 @@ feature_3 <- feature_2
 feature_3 <- yeo_johnson_trans(feature_3, numeric_cols)
 feature_3 <- remove_outlier(feature_3, numeric_cols)
 
-coef_magnitudes <- coef(lm_base)[-1]
-print(coef_magnitudes)
 
 
-print("Significant variables")
-significant_features <- list()
-print("Insignificant variables")
-no_sig_features <- list()
 
-# Remove multicollinearity
+# Scale feature
 # ___________________________________
 
-## Check multicollinearity
+feature_4 <- feature_3
+feature_4 <- scale_columns(feature_4, numeric_cols)
 
-### Draw Correlation heatmap
-feature_no_genre <- feature_3 %>% select(-Genre_factor) # Remove genre 
+lm_scale <- lm("Gross ~ .", data = feature_4)
+coef_magnitudes <- coef(lm_scale)[-1]
+
+print("Box-cox coef ranking")
+print(coef_magnitudes /100000)
+
+
+
+# Feature selection
+# ___________________________________
+
+feature_5 <- feature_4
+## Detect multicollinearity
+feature_no_genre <- feature_4 %>% select(-Genre_factor) # Remove genre 
 corrplot(cor(feature_no_genre), method = "circle")
+run_vif(lm_scale)
 
-run_vif(feature_no_genre)
+## Remove insignificant - collinear columns
+columns_to_remove <- list("Dislikes", "Comments")
+
+feature_5 <- feature_5[, !(names(feature_5) %in% columns_to_remove)]
+
+## Run PCA to generate pairs 
+pair_1 <- c("Budget", "Screens")
+pair_2 <- c("Views", "Likes")
+
+feature_5 <- pca_columns(feature_5, pair_1)
+feature_5 <- feature_5 %>% 
+  rename(
+    Budget_Screens = "pca_subset"
+    )
+
+feature_5 <- pca_columns(feature_5, pair_2)
+feature_5 <- feature_5 %>% 
+  rename(
+    Likes_Views = "pca_subset"
+    )
 
 
-feature_3 <- scale_columns(feature_3)
+# Linear model - feature selection
+# ___________________________________
+
+mod_feature_5 <- run_model(feature_5)
+lm_2 <- mod_feature_5$model
+lm2_result <- mod_feature_5$result
+
+print("Feature Engineered model summary")
+print(summary(lm_2))
+print("Feature Engineered model MSE")
+print(lm2_result)
+print("Feature Engineered model RMSE")
+print(sqrt(lm2_result))
+
+
+# Linear model - Imputation
+# ___________________________________
+
+## Missing data categorize
+
+# columns_with_missing <- colnames(feature_1)[colSums(is.na(feature_1)) > 0]
+
+# ## Missing at Random (MAR) test using logreg
+
+# ## Create an array indicating missing values
+# ## 0 if No missing, 1 if there is missing data
+# missing_indicator <- apply(is.na(feature_1), 1, function(row) ifelse(any(row), 0, 1))
+
+
+# p_vals <- rep(NA, length(columns_with_missing))
+
+# for (j in 1:length(columns_with_missing)) {
+#   col_name <- columns_with_missing[j]
+#   s <- summary(glm(missing_indicator ~ unlist(feature_1[, col_name])), family = binomial)
+#   p_vals[j] <- s$coefficients[2,4]
+#   s$coefficients[2,4]
+# }
+
+# print(p_vals)
+# H0_MAR <- which(p_vals >= 0.05)
+# H1_MAR <- which(p_vals < 0.05)
+
+# print("H0 means that either missing value are MCAR, or MNAR")
+# Non_MAR_cols <- columns_with_missing[H0_MAR]
+# print(paste("Column that are H0:", Non_MAR_cols))
+
+# print("H1 means that MAR")
+# MAR_cols <- columns_with_missing[H1_MAR]
+# print(paste("Column that are H1:", MAR_cols))
+
+
+
+# ## Missing Completely at Random (MCAR) test
+
+# df_filtered <- feature_1[Non_MAR_cols]
+
+# H0_MCAR <- list()
+# H1_MCAR <- list()
+
+# for (i in Non_MAR_cols) {
+#   mcar_p_val <- mcar_test(data.frame(df_filtered[, i]))[1, 3]
+#   if(mcar_p_val >= 0.05) {
+#     H0_MCAR <- c(H0_MCAR, i)
+#   } else {
+#     H1_MCAR <- c(H1_MCAR, i)
+#   }
+# }
+# print(paste("Columns that are MCAR: ", H0_MCAR))
+# print(paste("Columns that are not MCAR: ", H1_MCAR))
+
+# # Imputation
+
+# ## MCAR imputation: Replace with mean
+
+# imputed_df <- feature_1
+# for(i in H0_MCAR) {
+#   mean_val <- mean(unlist(imputed_df[, i]), na.rm = TRUE)
+#   imputed_df[[i]] <- ifelse(is.na(imputed_df$agg_fl), mean_val, imputed_df[[i]])
+# }
+
+## MAR imputation: Multiple imputation
+
+# MAR_df <- imputed_df[, MAR_cols]
+# print(MAR_df)
+# imputed_data <- mice(MAR_df, m = 1, maxit = 10, method = 'pmm', seed = 21)
+# completed_data <- complete(imputed_data, 1)
+
+# imputed_df$Budget <- completed_data$Budget
+# imputed_df$Screens <- completed_data$Screens
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
