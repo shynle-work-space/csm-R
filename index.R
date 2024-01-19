@@ -220,3 +220,23 @@ print("Imputed model MSE")
 print(lm3_result)
 print("Imputed model RMSE")
 print(sqrt(lm3_result))
+
+
+# Linear model - Imputation with only significant (From the CorrPlot)
+# ___________________________________
+
+feature_8 <- feature_7
+col_to_select <- c("Ratings", "Budget_Screens", "Likes_Views", "is_sequel", "agg_fl", "Gross")
+
+feature_8 <- feature_8[, col_to_select]
+
+mod_feature_8 <- run_model(feature_8, "is_sequel")
+lm_4 <- mod_feature_8$model
+lm4_result <- mod_feature_8$result
+
+print("Select & Imputed model summary")
+print(summary(lm_4))
+print("Select & Imputed model MSE")
+print(lm4_result)
+print("Select & Imputed model RMSE")
+print(sqrt(lm4_result))
