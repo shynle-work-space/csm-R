@@ -155,7 +155,7 @@ print("Feature Engineered model RMSE")
 print(sqrt(lm2_result))
 
 
-# Linear model - Imputation
+# Imputation
 # ___________________________________
 
 ## Remove unused column
@@ -180,3 +180,43 @@ feature_6 <- cbind(feature_6[, setdiff(colnames(feature_6), c("Budget", "Screens
 
 print("Assert null")
 print(any(is.na(feature_6)))
+
+
+
+# Linear model - Imputation
+# ___________________________________
+
+
+feature_7 <- feature_6
+
+print(names(feature_7))
+
+feature_7 <- scale_columns(feature_7, c("Ratings", "Sentiment", "Views", "Likes", "agg_fl", "Budget", "Screens"))
+
+## Run PCA to generate pairs 
+pair_1 <- c("Budget", "Screens")
+pair_2 <- c("Views", "Likes")
+
+feature_7 <- pca_columns(feature_7, pair_1)
+feature_7 <- feature_7 %>% 
+  rename(
+    Budget_Screens = "pca_subset"
+    )
+
+feature_7 <- pca_columns(feature_7, pair_2)
+feature_7 <- feature_7 %>% 
+  rename(
+    Likes_Views = "pca_subset"
+    )
+
+
+mod_feature_7 <- run_model(feature_7)
+lm_3 <- mod_feature_7$model
+lm3_result <- mod_feature_7$result
+
+print("Imputed model summary")
+print(summary(lm_3))
+print("Imputed model MSE")
+print(lm3_result)
+print("Imputed model RMSE")
+print(sqrt(lm3_result))
