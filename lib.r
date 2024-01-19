@@ -5,6 +5,7 @@ load_libraries <- function() {
     library(dplyr)
     library(car)
     library(DescTools)
+    library(Hmisc)
 
   }))
 }
@@ -89,22 +90,75 @@ scale_columns <- function(df, columns) {
 }
 
 pca_columns <- function (df, columns_for_pca) {
-  # Create a subset dataframe with only selected columns
   df_subset <- df[, columns_for_pca]
-
-  # Standardize the data (optional but recommended for PCA)
   scaled_data <- scale(df_subset)
-
-  # Perform PCA
   pca_result <- prcomp(scaled_data)
-
-  # Select the desired number of principal components
-  # num_components_to_retain <- 1
-  # pca_subset <- pca_result$x[, 1:num_components_to_retain]
   pca_subset <- pca_result$x[, 1]
-
-  # Combine the PCA subset with the rest of the columns
   df_result <- cbind(df[, setdiff(colnames(df), columns_for_pca)], pca_subset)
-
   return(df_result)
+}
+
+mar_check <- function (data, columns_with_missing) {
+  # Create an array indicating missing values
+  ## 0 if No missing, 1 if there is missing data
+  missing_indicator <- apply(is.na(data), 1, function(row) ifelse(any(row), 0, 1))
+
+
+  p_vals <- rep(NA, length(columns_with_missing))
+
+  for (j in 1:length(columns_with_missing)) {
+    col_name <- columns_with_missing[j]
+    s <- summary(glm(missing_indicator ~ unlist(data[, col_name])), family = binomial)
+    p_vals[j] <- s$coefficients[2,4]
+    s$coefficients[2,4]
+  }
+
+  H0_MAR <- which(p_vals >= 0.05)
+  H1_MAR <- which(p_vals < 0.05)
+
+  print("H0 means that either missing value are MCAR, or MNAR")
+  Non_MAR_cols <- columns_with_missing[H0_MAR]
+  print(paste("Column that are H0:", Non_MAR_cols))
+  print("Column that are H0:")
+  print(Non_MAR_cols)
+
+  print("H1 means that MAR")
+  MAR_cols <- columns_with_missing[H1_MAR]
+  print("Column that are H1:")
+  print(MAR_cols)
+  return(list(no_mar=Non_MAR_cols))
+}
+
+mcar_check <- function (data, cols) {
+  
+  df_filtered <- data[cols]
+
+  H0_MCAR <- list()
+  H1_MCAR <- list()
+
+  for (i in cols) {
+    mcar_p_val <- mcar_test(data.frame(df_filtered[, i]))[1, 3]
+    if(mcar_p_val >= 0.05) {
+      H0_MCAR <- c(H0_MCAR, i)
+    } else {
+      H1_MCAR <- c(H1_MCAR, i)
+    }
+  }
+  print(paste("Columns that are MCAR: ", H0_MCAR))
+  print(paste("Columns that are not MCAR: ", H1_MCAR))
+}
+
+mean_impute <- function (imputed_df, cols) {
+  for(i in cols) {
+    mean_val <- mean(unlist(imputed_df[, i]), na.rm = TRUE)
+    imputed_df[[i]] <- ifelse(is.na(imputed_df$agg_fl), mean_val, imputed_df[[i]])
+  }
+  return(imputed_df)
+}
+
+multiple_impute <- function (df, cols) {
+  MAR_df <- df[, cols]
+  imputed_data <- mice(MAR_df, m = 1, maxit = 10, method = 'cart', seed = 21)
+  completed_data <- complete(imputed_data, 1)
+  return(completed_data)
 }
